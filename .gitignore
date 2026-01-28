@@ -1,0 +1,94 @@
+# ================================
+# MATLAB
+# ================================
+
+# Autosave files
+*.asv
+
+# Backup files
+*.m~
+
+# Compiled MATLAB files
+*.mex*
+*.p
+
+# Simulink cache and code generation
+slprj/
+sccprj/
+*.slxc
+*.slx.r*
+*.mdl.r*
+
+# MATLAB temporary files
+*.tmp
+*.bak
+*.log
+
+# MATLAB figures
+*.fig
+
+# MATLAB live editor autosave
+*.autosave
+
+# MATLAB generated folders
+codegen/
+work/
+cache/
+
+# Parallel computing
+job_storage/
+
+# MATLAB app packaging
+*.mlappinstall
+
+# MATLAB preferences
+matlab.prf
+
+# ================================
+# Data files (usually large)
+# ================================
+
+*.mat
+*.csv
+*.dat
+*.h5
+*.hdf5
+
+# ================================
+# OS / Editor
+# ================================
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+
+# ================================
+# Python (if used)
+# ================================
+__pycache__/
+*.pyc
+*.pyo
+
+# ================================
+# LaTeX / reports
+# ================================
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# ================================
+# Archives
+# ================================
+*.zip
+*.tar
+*.gz

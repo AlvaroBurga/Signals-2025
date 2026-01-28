@@ -1,0 +1,116 @@
+ clc; clear; close all;
+% 
+% % Loading of the time and signals
+load("Experiment_table.mat")
+
+%% Resampling and reshaping
+
+t1 = x1(:,1);
+t2 = x2(:,1);
+t3 = x3(:,1);
+t4 = x4(:,1);
+t5 = x5(:,1);
+t6 = x6(:,1);
+
+% Sample Time and Sample Frequency
+T1 = (t1(2)-t1(1)); F1 = 1/T1;
+T2 = (t2(2)-t2(1)); F2 = 1/T2;
+T3 = (t3(2)-t3(1)); F3 = 1/T3;
+T4 = (t4(2)-t4(1)); F4 = 1/T4;
+T5 = (t5(2)-t5(1)); F5 = 1/T5;
+T6 = (t6(2)-t6(1)); F6 = 1/T6;
+ 
+F_s = [F1 F2 F3 F4 F5 F6];
+
+%{
+The maxmimum sample frequency among the signals is
+taken as common sample frequency.
+%}
+
+Fs_c = max(F_s);
+
+% Resampling of the signals
+% It's needed to change the time axis due to resampling
+% Nnew​=round(Nold​⋅q2/p2​) resample compute this formula
+
+% Cell Phone Number 1 Resampling
+[p1, q1] = rat(Fs_c/F1, 1e-6);  
+x1_r = resample(x1(:,2:5), p1, q1);
+% N1 = size(x1_r, 1);
+% x1_r = [(0:N1-1)' / Fs_c x1_r];
+
+% Cell Phone Number 2 Resampling
+[p2, q2] = rat(Fs_c/F2, 1e-6);  
+x2_r = resample(x2(:,2:5), p2, q2);
+% N2 = size(x2_r, 1);
+% x2_r = [(0:N2-1)' / Fs_c x2_r];
+
+% Cell Phone Number 3 Resampling
+[p3, q3] = rat(Fs_c/F3, 1e-6);  
+x3_r = resample(x3(:,2:5), p3, q3);
+% N3 = size(x3_r, 1);
+% x3_r = [(0:N3-1)' / Fs_c x3_r];
+
+% Cell Phone Number 4 Resampling
+[p4, q4] = rat(Fs_c/F4, 1e-6);  
+x4_r = resample(x4(:,2:5), p4, q4);
+% N4 = size(x4_r, 1);
+% x4_r = [(0:N4-1)' / Fs_c x4_r];
+
+% Cell Phone Number 5 Resampling
+[p5, q5] = rat(Fs_c/F5, 1e-6);  
+x5_r = resample(x5(:,2:5), p5, q5);
+% N5 = size(x5_r, 1);
+% x5_r = [(0:N5-1)' / Fs_c x5_r];
+
+% Cell Phone Number 6 Resampling
+[p6, q6] = rat(Fs_c/F6, 1e-6);  
+x6_r = resample(x6(:,2:5), p6, q6);
+% N6 = size(x6_r, 1);
+% x6_r = [(0:N6-1)' / Fs_c x6_r];
+
+L_min=min([length(x1_r),length(x2_r),length(x3_r),length(x4_r),length(x5_r),length(x6_r)]);
+
+x=[x1_r(1:L_min,:), x2_r(1:L_min,:), x3_r(1:L_min,:), x4_r(1:L_min,:), x5_r(1:L_min,:), x6_r(1:L_min,:)];
+
+
+%% Data segmentation and processing
+x1=x(1:1500,:);     % dataset of the 1st experiment
+x2=x(1501:2500,:);  % dataset  of 2nd experiment
+
+id=[3,4;2,5;1,6];
+% lagDiff=zeros(3,1);
+% z1_align=zeros(1500,6);
+
+for i=2:2,
+    [acor,lag]=xcorr(x1(:,4*id(i,1)-1), x1(:,4*id(i,2)-1));
+    figure(2); plot(lag,acor); pause(1);    %debug plot
+    [~,I] = max(abs(acor));
+    lagDiff(i) = lag(I) % delay x1(:,4*id(i,1)-1) wrt x1(:,4*id(i,2)-1) as ref.
+    x1(:,4*id(i,1)-1)=circshift(x1(:,4*id(i,1)-1), -lagDiff(i));
+    z1_align(:,id(i,2))=x1(:,4*id(i,2)-1); z1_align(:,id(i,1))=x1(:,4*id(i,1)-1);
+end
+
+figure(1);
+plot([z1_align(:,3),2+z1_align(:,4)],'-') % test alignement plot w/shift
+
+tauA = abs(lagDiff);
+
+%% Using the b signal
+
+
+for i=2:2
+    figure(1); plot(x2(:,4*id(i,1)-1));  hold on; plot(x2(:,4*id(i,2)-1));
+    [acor,lag]=xcorr(x2(:,4*id(i,1)-1), x2(:,4*id(i,2)-1));
+    figure(2); plot(lag,acor); pause(1);    %debug plot
+
+    [~,I] = max(abs(acor));
+    lag(I)
+    tauB(i) = lag(I) - tauA(i)
+    travel_time = abs(tauB(i))/Fs_c
+    travel_space = 0.175*(2*(i-1)+1)
+    v(i) = travel_space/travel_time
+end
+
+%% Tonteando
+x=[x1_r(1:L_min,:), x2_r(1:L_min,:), x3_r(1:L_min,:), x4_r(1:L_min,:), x5_r(1:L_min,:), x6_r(1:L_min,:)];
