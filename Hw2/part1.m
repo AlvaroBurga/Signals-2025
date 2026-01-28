@@ -30,7 +30,7 @@ y_source = B*sin(w0*t); %Position y of the source
 points = 100; %Number of points to analyse the ToD
 win_size = ceil(M/points); %Window size of the analisis
 
-%% Part 2.1
+%% Part 2.1.a
 resolution = 40; % Number of samples to interpolate
 t0_values = [1, 2.5, 2];
 SNR_dB_values = [-30, -10, 0, 10, 30, 50, 70];
@@ -57,7 +57,7 @@ for i = 1:length(t0_values)
 end
 MSE_dB = 10*log(mse);
 
-%% --- Plot 2.1: MSE (dB) vs SNR (dB) for different t(s) ---
+%% --- Plot 2.1.a: MSE (dB) vs SNR (dB) for different t(s) ---
 figure;
 hold on;
 for i = 1:length(t0_values)
@@ -70,9 +70,9 @@ title('MSE vs SNR for different t0');
 legend('Location', 'northeast');
 grid on;
 hold off;
-%% --- Part 2.2 --- in DToD
+%% --- Part 2.1.b --- in DToD
 resolution = 20;
-SNR_dB_values = [-20, 0, 10, 20, 30];
+SNR_dB_values = [-10, 0, 10, 20, 30];
 R_right = zeros(M,length(SNR_dB_values));
 R_left = zeros(M,length(SNR_dB_values));
 MC = 30; %Montecarlo simulation
@@ -96,18 +96,26 @@ for idx = 1:length(SNR_dB_values)
         K2 = K1;
 
         for i = K1:win_size:M-K2
+
+            win = floor(win_size/2);
+            a = max(1, i - win);
+            b = min(length(mic_left), i + win);
+
             t0 = i /Fs;
             delta_tau_tmp(i,m) = delta_tau_tmp(i,m) + tau_estimator(t0, mic_left, mic_right, Fs, win_size, resolution);
             real_tau_tmp = ToD_right(i) -  ToD_left(i);
             MSE_DToD_tmp(i,m) = MSE_DToD_tmp(i,m) + (real_tau_tmp - delta_tau_tmp(i,m))^2;
+            mp = meanPower(mic_left, mic_right, win_size, i);
+            signal_recovered_tmp(i-win_size/2 : i + win_size/2,m) = recover_signal(mic_left, delta_tau_tmp(i,m), i, win_size, mp);
         end
     end
+    signal_recovered(:, idx) = mean(signal_recovered_tmp, 2);
     delta_tau(:,idx) = mean(delta_tau_tmp, 2);
     MSE_DToD(:, idx) = mean(MSE_DToD_tmp, 2);
     real_tau = ToD_right - ToD_left;
 end
 
-%% --- Plot 2.2: time (s) vs time delay (s) for different SNR(dB) ---
+%% --- Plot 2.1.b: time (s) vs time delay (s) for different SNR(dB) ---
 MSE_dB = 10*log(MSE_DToD);
 numSNR = length(SNR_dB_values);
 
@@ -128,9 +136,7 @@ for i = 1:numSNR
     legend('Real delay','Estimated delay','Location','best')
 end
 
-%%
-bin_width = 5e-5;
-
-edges = min(tod):bin_width:max(tod);
-
-histogram(tod, edges)
+%% 2.1.b. To hear the recoverd signal of the max power
+numSNR = length(SNR_dB_values);
+r = [signal_recovered(:,numSNR) signal_recovered(:,numSNR)];
+sound(r, Fs);

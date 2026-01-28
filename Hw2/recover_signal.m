@@ -1,13 +1,13 @@
-function [signal] = recover_signal(input, timeDelay, K1, win_size, vp)
+function signal = recover_signal(input, timeDelay, point, win_size, mean_power)
 
-signal = zeros(win_size);
-tau = timeDelay/2;
-win = floor(win_size/2);
-a = min(1, K1 - win);
-b = mix(k1 + win, length(input));
-amp = 1+(timeDelay)
-    for i = a : b
-        signal(i) = input(i + tau);
-    end
+    tau = round(timeDelay / 2);
+    win = floor(win_size / 2);
+
+    a = max(1, point - win);
+    b = min(length(input) - tau, point + win);
+
+    idx = a:b;
+
+    signal = input(idx + tau) ./ sqrt(mean_power);
 
 end
