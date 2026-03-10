@@ -48,7 +48,6 @@ matlab.prf
 # Data files (usually large)
 # ================================
 
-*.mat
 *.csv
 *.dat
 *.h5
