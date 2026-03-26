@@ -16,6 +16,7 @@ t_end   = 54;   % end time in seconds
 
 i1 = floor(t_start * Fs) + 1;   % starting sample index
 i2 = floor(t_end   * Fs);       % ending sample index
+s = s_full(i1:i2,1) + s_full(i1:i2,2);
 
 M = i2 - i1 + 1; %Number of samples evaluated
 t = (0:M-1)' / Fs; %Time vector
@@ -78,7 +79,8 @@ R_left = zeros(M,length(SNR_dB_values));
 MC = 30; %Montecarlo simulation
 MSE_DToD= zeros(M,length(SNR_dB_values));
 delta_tau = zeros(M,length(SNR_dB_values));
-signal_recovered = zeros(M,length(SNR_dB_values));
+signal_recovered_L = zeros(M,length(SNR_dB_values));
+signal_recovered_R = zeros(M,length(SNR_dB_values));
 
 
 for idx = 1:length(SNR_dB_values)
@@ -87,7 +89,9 @@ for idx = 1:length(SNR_dB_values)
 
     delta_tau_tmp= zeros(M,MC);
     MSE_DToD_tmp= zeros(M,MC);
-    signal_recovered_tmp = zeros(M,MC);
+    signal_recovered_tmp_L = zeros(M,MC);
+    signal_recovered_tmp_R = zeros(M,MC);
+
     for m = 1:MC
         [mic_left,ToD_left] = rx_generator(SNR,Fs,x_left,x_source,y_source,vp,s_full,i1,i2);
         [mic_right,ToD_right] = rx_generator(SNR,Fs,x_right,x_source,y_source,vp,s_full,i1,i2);
@@ -105,11 +109,18 @@ for idx = 1:length(SNR_dB_values)
             delta_tau_tmp(i,m) = delta_tau_tmp(i,m) + tau_estimator(t0, mic_left, mic_right, Fs, win_size, resolution);
             real_tau_tmp = ToD_right(i) -  ToD_left(i);
             MSE_DToD_tmp(i,m) = MSE_DToD_tmp(i,m) + (real_tau_tmp - delta_tau_tmp(i,m))^2;
-            mp = meanPower(mic_left, mic_right, win_size, i);
-            signal_recovered_tmp(i-win_size/2 : i + win_size/2,m) = recover_signal(mic_left, delta_tau_tmp(i,m), i, win_size, mp);
+
+            mp = 1;
+            %Use this to compensate the attenuation
+            %mp = meanPower(mic_left, mic_right, win_size, i);
+
+            signal_recovered_tmp_L(a:b,m) = recover_signal(mic_left, delta_tau_tmp(i,m), i, win_size,mp);
+            signal_recovered_tmp_R(a:b,m) = recover_signal(mic_right, delta_tau_tmp(i,m)*-1, i, win_size,mp);
+
         end
     end
-    signal_recovered(:, idx) = mean(signal_recovered_tmp, 2);
+    signal_recovered_L(:, idx) = mean(signal_recovered_tmp_L, 2);
+    signal_recovered_R(:, idx) = mean(signal_recovered_tmp_R, 2);
     delta_tau(:,idx) = mean(delta_tau_tmp, 2);
     MSE_DToD(:, idx) = mean(MSE_DToD_tmp, 2);
     real_tau = ToD_right - ToD_left;
@@ -137,6 +148,28 @@ for i = 1:numSNR
 end
 
 %% 2.1.b. To hear the recoverd signal of the max power
-numSNR = length(SNR_dB_values);
-r = [signal_recovered(:,numSNR) signal_recovered(:,numSNR)];
+mse_L = 10*log((signal_recovered_L - s).^2);
+mse_R = 10*log((signal_recovered_R - s).^2);
+mean_mse_L = mean(mse_L, 1);
+mean_mse_R = mean(mse_R, 1);
+
+figure;
+
+subplot(1,2,1)
+plot(SNR_dB_values, mean_mse_L, '-o', 'LineWidth', 1.5)
+xlabel('SNR (dB)')
+ylabel('Average MSE')
+title('Left channel')
+grid on
+
+subplot(1,2,2)
+plot(SNR_dB_values, mean_mse_R, '-o', 'LineWidth', 1.5)
+xlabel('SNR (dB)')
+ylabel('Average MSE')
+title('Right channel')
+grid on
+
+
+%% Sound
+r = [signal_recovered_L(:,numSNR) signal_recovered_R(:,numSNR)];
 sound(r, Fs);
