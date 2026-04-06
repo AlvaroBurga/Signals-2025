@@ -23,16 +23,15 @@ function delta_tau = tau_estimator(t0, mic_left, mic_right, Fs, win_size, resolu
         % Function h(t)
         h = @(t) sin(pi*t) ./ ( N * sin(pi*t/N) + eps );   % +eps avoids division by zero
     
-        % ========== Evaluate interpolated correlation ===================
+        % Evaluate interpolated correlation
         r_interp = zeros(size(tau_vec));
         
         for i = 1:length(tau_vec)
             tau = tau_vec(i);
-            a = h( tau - lags );
             r_interp(i) = sum( r .* h( tau - lags )' );
         end
     
-        % === Find the interpolated maximum and convert to time ===
+        % Find the interpolated maximum and convert to time
         [~, idx_up] = max(r_interp);
         delta_index = tau_vec(idx_up); %Delta index is fractional. According with the resolution
         delta_tau = delta_index / Fs;

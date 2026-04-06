@@ -32,10 +32,10 @@ points = 100; %Number of points to analyse the ToD
 win_size = ceil(M/points); %Window size of the analisis
 
 %% Part 2.1.a
-resolution = 40; % Number of samples to interpolate
+resolution = 20; % Number of samples to interpolate
 t0_values = [1, 2.5, 2];
 SNR_dB_values = [-30, -10, 0, 10, 30, 50, 70];
-MC = 100;
+MC = 300;
 
 tau_est = zeros(length(t0_values), length(SNR_dB_values));
 tau_real = zeros(length(t0_values), length(SNR_dB_values));
@@ -49,24 +49,25 @@ for i = 1:length(t0_values)
             [mic_left,ToD_left] = rx_generator(SNR_dB_values(j),Fs,x_left,x_source,y_source,vp,s_full, i1, i2);
             [mic_right,ToD_right] = rx_generator(SNR_dB_values(j),Fs,x_right,x_source,y_source, vp,s_full, i1, i2);  
             tau_real(i,j) =  ToD_right(index) - ToD_left(index);
-            tau_temp(m) = tau_estimator(t0_values(i), mic_left, mic_right, Fs,win_size, resolution); 
-            mse_temp(m) = (tau_temp(m) - tau_real(i,j))^2;
+            tau_temp(m) = tau_estimator(t0_values(i), mic_left, mic_right, Fs,win_size, resolution);
+            error_time = tau_temp(m) - tau_real(i,j);
+            mse_temp(m) = error_time^2;
         end
         mse(i,j) = mean(mse_temp);
         tau_est(i,j) = mean(tau_temp);
     end
 end
-MSE_dB = 10*log(mse);
+rmse = sqrt(mse);
 
-%% --- Plot 2.1.a: MSE (dB) vs SNR (dB) for different t(s) ---
+%% --- Plot 2.1.a: RMSE (s) vs SNR (dB) for different t(s) ---
 figure;
 hold on;
 for i = 1:length(t0_values)
-    plot(SNR_dB_values, MSE_dB(i,:), '-o', 'LineWidth', 1.5, ...
+    plot(SNR_dB_values, rmse(i,:), '-o', 'LineWidth', 1.5, ...
         'DisplayName', ['t = ' num2str(t0_values(i))]);
 end
 xlabel('SNR (dB)');
-ylabel('Mean Squared Error (dB)');
+ylabel('Root Mean Squared Error  (s)');
 title('MSE vs SNR for different t0');
 legend('Location', 'northeast');
 grid on;
@@ -96,12 +97,10 @@ for idx = 1:length(SNR_dB_values)
         [mic_left,ToD_left] = rx_generator(SNR,Fs,x_left,x_source,y_source,vp,s_full,i1,i2);
         [mic_right,ToD_right] = rx_generator(SNR,Fs,x_right,x_source,y_source,vp,s_full,i1,i2);
 
-        K1 = floor(win_size/2) + 1 ;
-        K2 = K1;
+        win = floor(win_size/2);
 
-        for i = K1:win_size:M-K2
-
-            win = floor(win_size/2);
+        for i = win:win_size:M-win %Working in a window, to not consider all points
+            
             a = max(1, i - win);
             b = min(length(mic_left), i + win);
 
@@ -110,12 +109,8 @@ for idx = 1:length(SNR_dB_values)
             real_tau_tmp = ToD_right(i) -  ToD_left(i);
             MSE_DToD_tmp(i,m) = MSE_DToD_tmp(i,m) + (real_tau_tmp - delta_tau_tmp(i,m))^2;
 
-            mp = 1;
-            %Use this to compensate the attenuation
-            %mp = meanPower(mic_left, mic_right, win_size, i);
-
-            signal_recovered_tmp_L(a:b,m) = recover_signal(mic_left, delta_tau_tmp(i,m), i, win_size,mp);
-            signal_recovered_tmp_R(a:b,m) = recover_signal(mic_right, delta_tau_tmp(i,m)*-1, i, win_size,mp);
+            signal_recovered_tmp_L(a:b,m) = recover_signal(mic_left, delta_tau_tmp(i,m), i, win_size);
+            signal_recovered_tmp_R(a:b,m) = recover_signal(mic_right, delta_tau_tmp(i,m)*-1, i, win_size);
 
         end
     end
@@ -171,5 +166,5 @@ grid on
 
 
 %% Sound
-r = [signal_recovered_L(:,numSNR) signal_recovered_R(:,numSNR)];
+r = [signal_recovered_L(:,1) signal_recovered_R(:,1)];
 sound(r, Fs);

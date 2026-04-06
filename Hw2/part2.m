@@ -27,99 +27,156 @@ x = step*d/(N-1);
 A = L; %Long radious of the elipse
 B = L/2; % Small radious of the elipse
 x_source = A*cos(w0*t); %Position x of the source
-y_source = B*sin(w0*t); %Position y of the source 
+y_source = B*sin(w0*t); %Position y of the source
 
 points = 100; %Number of points to analyse the ToD
 win_size = ceil(M/points); %Window size of the analisis
-%% --- Part 2.2.a --- in DToD
+%% --- Part 2.2.c --- in DToD
 resolution = 20;
-SNR_dB_values = [-10, 0, 10, 20, 30];
-R = zeros(M,length(SNR_dB_values), N);
-MC = 20; %Montecarlo simulation
-MSE_DToD= zeros(M,length(SNR_dB_values));
-delta_tau = zeros(M,length(SNR_dB_values));
-signal_recovered = zeros(M,length(SNR_dB_values), N);
+SNR_dB_values = [-10, 0, 10, 20, 30, 40];
+estimated_signal= zeros(M,length(SNR_dB_values));
 
-for j = 1:N
-    for k = (j+1):N
-        for idx = 1:length(SNR_dB_values)
-        
-            SNR = SNR_dB_values(idx);
-        
-            delta_tau_tmp= zeros(M,MC);
-            MSE_DToD_tmp= zeros(M,MC);
-            signal_recovered_tmp_j = zeros(M,MC);
-            signal_recovered_tmp_k = zeros(M,MC);
-            for m = 1:MC
-                [mic_left,ToD_left] = rx_generator(SNR,Fs,x(j),x_source,y_source,vp,s_full,i1,i2);
-                [mic_right,ToD_right] = rx_generator(SNR,Fs,x(k),x_source,y_source,vp,s_full,i1,i2);
-        
-                K1 = floor(win_size/2) + 1 ;
-                K2 = K1;
-        
-                for i = K1:win_size:M-K2
-        
-                    win = floor(win_size/2);
-                    a = max(1, i - win);
-                    b = min(length(mic_left), i + win);
-        
-                    t0 = i /Fs;
-                    delta_tau_tmp(i,m) = delta_tau_tmp(i,m) + tau_estimator(t0, mic_left, mic_right, Fs, win_size, resolution);
-                    real_tau_tmp = ToD_right(i) -  ToD_left(i);
-                    MSE_DToD_tmp(i,m) = MSE_DToD_tmp(i,m) + (real_tau_tmp - delta_tau_tmp(i,m))^2;
+signal_recovered = cell(1, N); %The Signal recovered for each mic
+for i = 1:N
+    signal_recovered{i} = zeros(M, length(SNR_dB_values)); %The rx signal for each SNR
+end
 
-                    mp = 1;
-                    %Use this to compensate the attenuation
-                    %mp = meanPower(mic_left, mic_right, win_size, i);
 
-                    signal_recovered_tmp_j(i-win_size/2 : i + win_size/2,m) = recover_signal(mic_left, delta_tau_tmp(i,m), i, win_size, mp);
-                    signal_recovered_tmp_k(i-win_size/2 : i + win_size/2,m) = recover_signal(mic_right, -delta_tau_tmp(i,m), i, win_size, mp);
+for idx = 1:length(SNR_dB_values) %For each SNR value defined
 
-                end
+    SNR = SNR_dB_values(idx);
+    mics = cell(1, N); %The recieved signals
+    ToDs = cell(1, N); %The delay from the source for each mic
+
+    %Generating the rx signals for each mic
+    for mic = 1:N
+        [mics{mic}, ToDs{mic}] = rx_generator(SNR,Fs,x(mic),x_source,y_source,vp,s_full,i1,i2);
+    end
+
+    %Calculate the dalay for each pair
+    mid = ceil(N/2);
+    for j = mid:mid
+        for k = 1:N
+
+            win = floor(win_size/2);
+            for win_i =win:win_size:M-win %For each time instant
+
+                win = floor(win_size/2);
+                a = max(1, win_i - win); %First point of the grouping
+                b = min(length(mics{k}), win_i + win); %last point of the grouping
+
+                t0 = win_i /Fs; %The time asociated with the group
+                delta_tau_tmp = tau_estimator(t0, mics{j}, mics{k}, Fs, win_size, resolution);
+                signal_recovered{k}(a : b,idx) = recover_signal(mics{j}, delta_tau_tmp, win_i, win_size);
+
             end
-            signal_recovered(:, idx,j) = signal_recovered(:, idx,j) + mean(signal_recovered_tmp_j, 2);
-            signal_recovered(:, idx,k) = signal_recovered(:, idx,k) + mean(signal_recovered_tmp_k, 2);
-            delta_tau(:,idx) = mean(delta_tau_tmp, 2);
-            MSE_DToD(:, idx) = mean(MSE_DToD_tmp, 2);
-            real_tau = ToD_right - ToD_left;
+
         end
     end
-end
 
-signal_recovered = signal_recovered/(N-1);
-%% --- Plot 2.1.b: time (s) vs time delay (s) for different SNR(dB) ---
-MSE_dB = 10*log(MSE_DToD);
-numSNR = length(SNR_dB_values);
-
-for i = 1:numSNR
-
-    subplot(numSNR, 1, i)  
-    plot(t, real_tau, 'k', 'LineWidth', 1.5); hold on
-    plot(t, delta_tau(:,i), 'LineWidth', 1.5);
-
-    title(['SNR = ' num2str(SNR_dB_values(i)) ' dB'])
-    ylabel('\tau (s)')
-    grid on
-
-    if i == numSNR
-        xlabel('t (s)')
+    for i = 1:N
+        estimated_signal(:,idx) = estimated_signal(:,idx) + signal_recovered{i}(:,idx);
     end
-
-    legend('Real delay','Estimated delay','Location','best')
 end
 
-%% 2.1.b. To hear the recoverd signal of the max power
-R= sum(signal_recovered,3)/N;
-mse = 10*log((R - s).^2);
-mean_mse = mean(R, 1);
+estimated_signal = estimated_signal/N;
+
+
+
+%% --- Part 2.2.c --- MSE
+mse = 10*log((estimated_signal - s).^2);
+mean_mse = mean(mse, 1);
 figure;
 
 plot(SNR_dB_values, mean_mse, '-o', 'LineWidth', 1.5)
 xlabel('SNR (dB)')
 ylabel('Average MSE')
-title('average')
+title('MSE vs SNR')
+grid on
+
+%%  --- Part 2.2.d --- in DToD
+resolution = 20;
+SNR_dB_values = [-10, 0, 10, 20, 30, 40];
+estimated_signal= zeros(M,length(SNR_dB_values));
+
+signal_recovered = cell(1, N); %The Signal recovered for each mic
+for i = 1:N
+    signal_recovered{i} = zeros(M, length(SNR_dB_values)); %The rx signal for each SNR
+end
+
+
+for idx = 1:length(SNR_dB_values) %For each SNR value defined
+
+    SNR = SNR_dB_values(idx);
+    mics = cell(1, N); %The recieved signals
+    ToDs = cell(1, N); %The delay from the source for each mic
+
+    %Generating the rx signals for each mic
+
+    %Noise
+    SNR_linear = 10^(SNR/10); 
+    var_w = 1/SNR_linear;
+    Rw = zeros(N,N);
+    for i = 1:N
+        for j =1:N
+            if(i == j)
+                Rw(i,j) = var_w;
+            elseif(abs(i-j) == 1)
+                Rw(i,j)= var_w*0.2;
+            else
+                Rw(i,j) = 0;
+            end
+        end
+    end
+
+    [eigenvectors, eigenvalues] = eig(Rw);
+
+    w = eigenvectors*sqrt(eigenvalues)*randn(N,M); %Correlated noise
+
+    for mic = 1:N
+        [mics{mic}, ToDs{mic}] = rx_generator_no_noise(Fs,x(mic),x_source,y_source,vp,s_full,i1,i2);
+        mics{mic} = mics{mic} + w(mic,:)';
+    end
+
+    %Calculate the dalay for each pair
+    mid = ceil(N/2);
+    for j = 1:1
+        for k = 1:N
+
+            win = floor(win_size/2);
+            for win_i =win:win_size:M-win %For each time instant
+
+                win = floor(win_size/2);
+                a = max(1, win_i - win); %First point of the grouping
+                b = min(length(mics{k}), win_i + win); %last point of the grouping
+
+                t0 = win_i /Fs; %The time asociated with the group
+                delta_tau_tmp = tau_estimator(t0, mics{j}, mics{k}, Fs, win_size, resolution);
+                signal_recovered{k}(a : b,idx) = recover_signal(mics{j}, delta_tau_tmp, win_i, win_size);
+
+            end
+
+        end
+    end
+
+    gamma = gamma_weights(N, 2);
+    for i = 1:N
+        estimated_signal(:,idx) = estimated_signal(:,idx) + signal_recovered{i}(:,idx)*gamma(i);
+    end
+end
+
+
+%% --- Part 2.2.d --- MSE
+mse = 10*log((estimated_signal - s).^2);
+mean_mse = mean(mse, 1);
+figure;
+
+plot(SNR_dB_values, mean_mse, '-o', 'LineWidth', 1.5)
+xlabel('SNR (dB)')
+ylabel('Average MSE')
+title('MSE vs SNR')
 grid on
 
 %% Sound
-r = [R(:,5) R(:,5)];
+r = [estimated_signal(:,5) estimated_signal(:,5)];
 sound(r, Fs);
