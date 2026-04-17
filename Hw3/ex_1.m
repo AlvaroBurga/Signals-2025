@@ -22,8 +22,9 @@ T_days   = height(open_prices);
 n_stocks = width(open_prices);
 tickers  = open_prices.Properties.VariableNames;
 
-P_o = table2array(open_prices);
-P_c = table2array(close_prices);
+P_o  = table2array(open_prices);
+P_c  = table2array(close_prices);
+Vol  = table2array(total_volumes);
 
 % Jan-Jun: ~124 trading days | Jul-Dec: rest
 N_train = 124;
@@ -31,18 +32,18 @@ idx_tr  = 1:N_train;
 idx_te  = (N_train+1):T_days;
 
 %% Train one linear predictor per stock
-% x_k(t) = [1, open(t), close(t-1), close(t-2), close(t-3), close(t-4)]
+% x_k(t) = [1, open(t), close(t-1), ..., close(t-4), vol(t-1)/1e6]
 L = 5;
-B = zeros(L+1, n_stocks);
+B = zeros(L+2, n_stocks);
 
 for k = 1:n_stocks
     valid = idx_tr(idx_tr > L);
     N_tr  = length(valid);
-    Xtr   = zeros(N_tr, L+1);
+    Xtr   = zeros(N_tr, L+2);
     ytr   = zeros(N_tr, 1);
     for ii = 1:N_tr
         t = valid(ii);
-        Xtr(ii,:) = [1, P_o(t,k), P_c(t-1,k), P_c(t-2,k), P_c(t-3,k), P_c(t-4,k)];
+        Xtr(ii,:) = [1, P_o(t,k), P_c(t-1,k), P_c(t-2,k), P_c(t-3,k), P_c(t-4,k), Vol(t-1,k)/1e6];
         ytr(ii)   = P_c(t,k);
     end
     B(:,k) = (Xtr'*Xtr) \ (Xtr'*ytr);
@@ -61,7 +62,7 @@ for ii = 1:length(idx_te)
 
     P_hat = zeros(n_stocks, 1);
     for k = 1:n_stocks
-        x_t = [1, P_o(t,k), P_c(t-1,k), P_c(t-2,k), P_c(t-3,k), P_c(t-4,k)]';
+        x_t = [1, P_o(t,k), P_c(t-1,k), P_c(t-2,k), P_c(t-3,k), P_c(t-4,k), Vol(t-1,k)/1e6]';
         P_hat(k) = B(:,k)' * x_t;
     end
 
@@ -83,12 +84,22 @@ fprintf('Initial capital:  %.2f EUR\n', C0);
 fprintf('Final capital:    %.2f EUR\n', C(end));
 fprintf('Total gain:       %.2f%%\n', 100*(C(end)-C0)/C0);
 
-%% --- Plot 1: Capital evolution ---
+%% --- Plot 1: Capital evolution and daily gain g(t) ---
+g_t = diff(C) ./ C(1:end-1);
+
 figure;
+subplot(2,1,1);
 plot(1:length(C), C, 'LineWidth', 1.5);
-xlabel('Trading day (Jul-Dec 2018)');
 ylabel('Capital (EUR)');
 title('Capital evolution - linear predictor strategy');
+grid on;
+
+subplot(2,1,2);
+plot(1:length(g_t), g_t*100, 'LineWidth', 1.2);
+yline(0, 'k--');
+xlabel('Trading day (Jul-Dec 2018)');
+ylabel('g(t) (%)');
+title('Daily percentage profit g(t)');
 grid on;
 
 %% --- Plot 2: Stock selection frequency ---
